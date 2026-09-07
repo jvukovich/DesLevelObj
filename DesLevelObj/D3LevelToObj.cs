@@ -60,6 +60,8 @@ namespace DesLevelObj
             var total = new D3Level.Vector3();
             foreach (var room in rooms)
             {
+                if (room == null)
+                    continue;
                 var roomTotal = new D3Level.Vector3();
                 foreach (var vert in room.verts)
                     roomTotal += vert;
@@ -93,8 +95,11 @@ namespace DesLevelObj
                 var roomTex = new HashSet<int>();
                 for (int roomIdx = 0; roomIdx < rooms.Count(); roomIdx++)
                 {
-                    f.WriteLine("o room" + (roomIdx + 1000).ToString().Substring(1));
                     var room = rooms[roomIdx];
+                    if (room == null)
+                        continue;
+
+                    f.WriteLine("o room" + (roomIdx + 1000).ToString().Substring(1));
                     foreach (var vert in room.verts)
                         f.WriteLine("v " + -(vert.x - center.x) + " " + (vert.y - center.y) + " " +
                             (vert.z - center.z));

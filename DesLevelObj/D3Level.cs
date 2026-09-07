@@ -751,7 +751,7 @@ namespace D3Level
                 byte val = r.ReadByte();
                 if (cmd == 0)
                     vals[ofs++] = val;
-                else if (cmd >= 2 && cmd < 250)
+                else if (cmd >= 2 && cmd <= 250)
                     for (int i = 0; i < cmd; i++)
                         vals[ofs++] = val;
                 else
@@ -956,6 +956,8 @@ namespace D3Level
                     {
                         int roomnum = (version >= 96) ? r.ReadInt16() : i;
                         //Console.WriteLine("Reading room " + roomnum);
+                        if (roomnum >= num_rooms)
+                            Array.Resize<Room>(ref rooms, roomnum + 1);
                         rooms[roomnum] = ReadRoom(r, version, texture_xlate);
                     }
                 }
