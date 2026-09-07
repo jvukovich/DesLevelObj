@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -48,6 +49,25 @@ namespace DesLevelObj
             WritePng(fn, img, w, h);
         }
 
+        // Fix.ToString formats as "N3", which inserts thousands separators once a coordinate
+        // reaches 1000 and corrupts the .obj. Numbers must always be plain and invariant.
+        private static string F(float v)
+        {
+            return v.ToString(CultureInfo.InvariantCulture);
+        }
+
+        // Descent geometry is Y-up. Modern game engines are commonly Z-up and their OBJ importers
+        // do not always convert, so bake the +90 degrees about X here - (x, y, z) -> (x, -z, y) -
+        // and nothing has to be rotated by hand after import. x stays negated as it always has
+        // been. Both the level mesh and the object placeholders go through this, so they stay
+        // aligned with each other.
+        public static void ToExportSpace(vms_vector v, out float x, out float y, out float z)
+        {
+            x = -v.x.ToFloat();
+            y = -v.z.ToFloat();
+            z = v.y.ToFloat();
+        }
+
         public static float DistSquared(vms_vector a, vms_vector b)
         {
             float dx = a.x.ToFloat() - b.x.ToFloat();
@@ -90,12 +110,16 @@ namespace DesLevelObj
                 f.WriteLine("mtllib " + Path.GetFileName(mtlName));
                 f.WriteLine("o " + Path.GetFileNameWithoutExtension(outName).Replace(' ', '_'));
                 foreach (var vert in mine.Vertices)
-                    f.WriteLine("v " + -vert.x.ToFloat() + " " + vert.y + " " + vert.z);
+                {
+                    float x, y, z;
+                    ToExportSpace(vert, out x, out y, out z);
+                    f.WriteLine("v " + F(x) + " " + F(y) + " " + F(z));
+                }
                 //foreach (var norm in modelReader.Norms.ItemList)
                 //    f.WriteLine("vn " + -norm.x.ToFloat() + " " + norm.y + " " + norm.z);
                 foreach (var side in sides)
                     foreach (var uvl in side.uvls)
-                        f.WriteLine("vt " + (uvl.u.ToFloat()) + " " + (-uvl.v.ToFloat()));
+                        f.WriteLine("vt " + F(uvl.u.ToFloat()) + " " + F(-uvl.v.ToFloat()));
                 foreach (var tex in lvlTex)
                 {
                     PigBitmap bmp;

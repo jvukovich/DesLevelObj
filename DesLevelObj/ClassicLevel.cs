@@ -63,7 +63,7 @@ namespace Classic
             r.Read(out fileinfo_version);
             r.Read(out fileinfo_sizeof);
             mine_filename = UTF8Encoding.UTF8.GetString(r.ReadBytes(15));
-            r.Read(out level);
+            // level was read twice here, which shifted every field below it by 4 bytes.
             r.Read(out level);
             r.Read(out player_offset);
             r.Read(out player_sizeof);
@@ -88,13 +88,6 @@ namespace Classic
             r.Read(out matcen_offset);
             r.Read(out matcen_howmany);
             r.Read(out matcen_sizeof);
-        }
-    }
-
-    public class ClassicObject
-    {
-        public void Read(BinaryReader r)
-        {
         }
     }
 
@@ -206,43 +199,6 @@ namespace Classic
         }
     }
 
-    public class ClassicLevelGame
-    {
-        game_fileinfo game_fileinfo;
-        string level_name;
-        ushort N_save_pof_names;
-        string[] Save_pof_names;
-        ClassicObject[] Objects;
-
-        public void Read(BinaryReader r)
-        {
-            int i;
-            game_fileinfo.Read(r);
-            if (game_fileinfo.fileinfo_signature != 0x6705)
-                throw new Exception("Invalid level file signature");
-            if (game_fileinfo.fileinfo_version >= 14)
-                level_name = r.ReadCString();
-            if (game_fileinfo.fileinfo_version >= 19)
-            {
-                r.Read(out N_save_pof_names);
-                Save_pof_names = new string[N_save_pof_names];
-                for (i = 0; i < N_save_pof_names; i++)
-                {
-                    byte[] buf = new byte[13];
-                    buf.Read(r);
-                    Save_pof_names[i] = Encoding.UTF8.GetString(buf);
-                }
-            }
-            if (game_fileinfo.object_offset > -1)
-            {
-                r.BaseStream.Position = game_fileinfo.object_offset;
-                Objects = new ClassicObject[game_fileinfo.object_howmany];
-                for (i = 0; i < game_fileinfo.object_howmany; i++)
-                    Objects[i].Read(r);
-            }
-        }
-    }
-
     public struct Mine
     {
         public vms_vector[] Vertices;
@@ -267,6 +223,9 @@ namespace Classic
     {
         public Mine mine;
         public string palette;
+        public List<LevelObj> Objects = new List<LevelObj>();
+        public int gameDataVersion;
+        public string ObjectReadError;
 
         public void Read(BinaryReader r)
         {
@@ -286,6 +245,37 @@ namespace Classic
             //secret level return
             r.BaseStream.Position = minedata_ofs;
             mine.Read(r, fileVersion);
+            ReadGameData(r, gamedata_ofs);
+        }
+
+        // The object table is the only part of the game data we care about. A failure here must
+        // not stop the mine geometry from being converted, so it is reported and swallowed.
+        private void ReadGameData(BinaryReader r, int gamedata_ofs)
+        {
+            try
+            {
+                r.BaseStream.Position = gamedata_ofs;
+                var info = new game_fileinfo();
+                info.Read(r);
+                if (info.fileinfo_signature != 0x6705)
+                    throw new Exception("Invalid game data signature");
+                gameDataVersion = info.fileinfo_version;
+                if (info.object_offset <= 0 || info.object_howmany <= 0)
+                    return;
+                r.BaseStream.Position = info.object_offset;
+                for (int i = 0; i < info.object_howmany; i++)
+                    Objects.Add(ClassicObjectReader.Read(r, gameDataVersion));
+                // The walls section follows the object table, so landing anywhere else means
+                // a record was misparsed and every position read is suspect.
+                if (info.walls_offset > 0 && r.BaseStream.Position != info.walls_offset)
+                    throw new Exception("object table ended at " + r.BaseStream.Position +
+                        ", expected " + info.walls_offset);
+            }
+            catch (Exception e)
+            {
+                Objects.Clear();
+                ObjectReadError = e.Message;
+            }
         }
     }
 }

@@ -148,6 +148,7 @@ namespace DesLevelObj
                 s.Close();
                 gameFiles.SelectPalette(lvl.palette);
                 LevelToObj.Convert(this, gameFiles, textureRemap, lvl, dest, dumpTex);
+                ObjectsToObj.Convert(this, lvl, Path.Combine(Path.GetDirectoryName(dest), Path.GetFileNameWithoutExtension(dest) + "_objects"));
             }
             Log("Converted level to " + dest);
         }
